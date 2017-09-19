@@ -55,11 +55,13 @@ module mycpu_top(
     wire AZero, AOverflow, ACarryOut;
     wire [31:0] rdata1, rdata2, ALUResult, SgnExt;
 
+    wire rst;
+
     wire [4:0] rs, rt;
     wire [5:0] func;
     wire [4:0] rd;
     wire [31:0] ALUA, ALUB;
-    (*mark_debug = "true"*) reg [31:0] MDR, A, B, ALUOut, IR;
+    reg [31:0] /*MDR,*/ A, B, ALUOut, IR;
     wire [31:0] PCnext;
     wire IsBEQ;
     wire Ze;
@@ -79,7 +81,7 @@ module mycpu_top(
             if (IRWrite) IR <= inst_sram_rdata;
 			if (PCdebug) debug_wb_pc <= PC;           //wbpc
 			
-            MDR <= data_sram_rdata;                               //淇敼淇″彿鍚嶇О
+ //           MDR <= data_sram_rdata;                               //淇敼淇″彿鍚嶇О
 			
             A <= rdata1;
             B <= rdata2;
@@ -90,12 +92,13 @@ module mycpu_top(
 //            cycle_cnt = cycle_cnt + 1;
         end
     end
- 
-always @(*) begin
-    if (|data_sram_wen) $display ("%h %h", data_sram_addr, data_sram_wdata);
+/* 
+always @(posedge clk) begin
+    if (|data_sram_wen) $display ("sw: %h %h", data_sram_addr, data_sram_wdata);
+    if (data_sram_en && ~|data_sram_wen) $display ("lw: %h %h", data_sram_addr, data_sram_rdata);
     end 
- 
-   
+ */
+    assign rst = ~resetn;
     
     assign rs = IR[25:21];
     assign rt = IR[20:16];
@@ -129,7 +132,7 @@ always @(*) begin
     
     reg_file reg_file1(
         .clk(clk), 
-        .rst(~resetn), 
+        .rst(rst), 
         .raddr1(rs), 
         .raddr2(rt), 
         .waddr(rd), 
@@ -146,7 +149,7 @@ always @(*) begin
         .Zero(AZero),
         .Result(ALUResult));
     control CPUcontrol(
-        .rst(~resetn), 
+        .rst(rst), 
         .clk(clk), 
         .op(IR[31:26]), 
         .func(IR[5:0]), 
@@ -185,7 +188,7 @@ always @(*) begin
         .RegDst(RegDst),
         .waddr(rd));
     WdataMUX WdataMUX(
-        .MDR(MDR), 
+        .MDR(data_sram_rdata), 
         .ALUOut(ALUOut), 
         .ALUOutLF(ALUOut << s),
         .MemtoReg(MemtoReg),
@@ -221,8 +224,8 @@ module control(
    assign PCdebug = StateC[0];
    assign RegDst[1]   = StateC[12];
    assign RegDst[0]   = StateC[7]  || StateC[16];
-   assign ALUSrcA     = StateC[2]  || StateC[6]  || StateC[8]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
-   assign ALUSrcB[1]  = StateC[1]  || StateC[2]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
+   assign ALUSrcA     = StateC[2]  || StateC[3]  || StateC[5]   || StateC[6]  || StateC[8]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
+   assign ALUSrcB[1]  = StateC[1]  || StateC[2]  || StateC[3]   || StateC[5]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
    assign ALUSrcB[0]  = StateC[0]  || StateC[1]  || StateC[11];
    assign MemtoReg[0] = StateC[4];
    assign MemtoReg[1] = StateC[16];
