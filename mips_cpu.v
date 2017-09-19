@@ -110,7 +110,8 @@ module mycpu_top(
         .wen(RegWrite), 
         .wdata(regwdata), 
         .rdata1(rdata1), 
-        .rdata2(rdata2));
+        .rdata2(rdata2)
+    );
     alu alu1(
         .A(ALUA), 
         .B(ALUB), 
@@ -118,7 +119,8 @@ module mycpu_top(
         .Overflow(AOverflow), 
         .CarryOut(ACarryOut), 
         .Zero(AZero),
-        .Result(ALUResult));
+        .Result(ALUResult)
+    );
     control CPUcontrol(
         .rst(rst), 
         .clk(clk), 
@@ -137,33 +139,38 @@ module mycpu_top(
         .PCSource(PCSource), 
         .ALUOp(ALUOp), 
         .PCdebug(PCdebug)
-        );
+    );
     ALUcontrol Acontrol(
         .ALUOp(ALUOp), 
         .func(IR[5:0]), 
-        .ALUop(ALUop));
+        .ALUop(ALUop)
+    );
     MUX4 ALUBMux(
         .op(ALUSrcB), 
         .B(B),
         .SgnExt(SgnExt), 
         .SgnExtLF(SgnExt << 2),
-        .ALUB(ALUB));
+        .ALUB(ALUB)
+    );
     MUX3 PCSourceMux(
         .PCS1(ALUResult), 
         .PCS2(ALUOut),
         .PCS3({PC[31:28],IR[25:0],2'b00}),
         .op(PCSource), 
-        .PC(PCnext));
+        .PC(PCnext)
+    );
     WaddrMUX WaddrMUX(
         .Instruction(IR[20:11]),
         .RegDst(RegDst),
-        .waddr(rd));
+        .waddr(rd)
+    );
     WdataMUX WdataMUX(
         .MDR(data_sram_rdata), 
         .ALUOut(ALUOut), 
         .ALUOutLF(ALUOut << s),
         .MemtoReg(MemtoReg),
-        .WriteData(regwdata));
+        .WriteData(regwdata)
+    );
  
     
 endmodule
