@@ -1,87 +1,135 @@
 `timescale 10ns / 1ns
 
-module mips_cpu(
-	input  rst,
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+//淇敼浜嗕笌data_sram淇″彿鏈夊叧鐨勯儴鍒嗭紝鏇存柊浜嗕富妯″潡鐨勮緭鍏ヨ緭鍑轰俊鍙凤紝骞跺皢鍘焟ips_cpu.v涓殑Control module鏇存柊锛�
+//鍏朵綑閮ㄥ垎鏈綔鏀瑰姩
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+module mycpu_top(
+/*	input  resetn,
 	input  clk,
 
 	output reg [31:0] PC,
 	input  [31:0] Instruction,
 
-	output [31:0] Address,
-	output MemWrite,
-	output [31:0] Write_data,
+	output [31:0] data_sram_addr,
+	output data_sram_wen,
+	output [31:0] data_sram_wdata,
 
-	input  [31:0] Read_data,
+	input  [31:0] data_sram_rdata,
 	output MemRead,
+*/	
+	
+	input  clk,
+    input  resetn,
 
-	output reg [31:0] cycle_cnt,		//counter of total cycles
-	output [31:0] inst_cnt,			//counter of total instructions
-	output [31:0] br_cnt,			//counter of branch/jump instructions
-	output [31:0] ld_cnt,			//counter of load instructions
-	output [31:0] st_cnt,			//counter of store instructions
-	output [31:0] user1_cnt,		//user defined counter (reserved)
-	output reg [31:0] user2_cnt,
-	output reg [31:0] user3_cnt
+    // instruction fetch port
+    output             inst_sram_en,
+    output      [ 3:0] inst_sram_wen,
+    output      [31:0] inst_sram_addr, // PC 
+    output      [31:0] inst_sram_wdata,
+    input       [31:0] inst_sram_rdata,
+    
+    // data fetch port
+    output             data_sram_en,
+    output      [ 3:0] data_sram_wen,
+    output      [31:0] data_sram_addr,
+    output      [31:0] data_sram_wdata,
+    input       [31:0] data_sram_rdata,
+
+    // debug signal
+	output reg [31:0] debug_wb_pc, 
+	output     [ 3:0] debug_wb_rf_wen,
+	output     [ 4:0] debug_wb_rf_wnum,
+	output     [31:0] debug_wb_rf_wdata
 );
 
 	// TODO: insert your code
-	wire  ALUSrcA, RegWrite, PCSrc, PCWriteCond, PCWrite, IRWrite;
+	wire  ALUSrcA, PCSrc, PCWriteCond, PCWrite, IRWrite;
     wire [1:0] ALUSrcB, PCSource, RegDst, MemtoReg;
     wire [2:0] ALUop, ALUOp;
     wire [31:0] regwdata;
-    
+    wire [3:0] RegWrite;
     
     wire AZero, AOverflow, ACarryOut;
-    wire [31:0] rdata1, rdata2, ALUResult, SgnExt, BResult;
+    wire [31:0] rdata1, rdata2, ALUResult, SgnExt;
 
     wire [4:0] rs, rt;
     wire [5:0] func;
     wire [4:0] rd;
-    wire [31:0] ALUA, ALUB, nPCtemp;
+    wire [31:0] ALUA, ALUB;
     (*mark_debug = "true"*) reg [31:0] MDR, A, B, ALUOut, IR;
     wire [31:0] PCnext;
     wire IsBEQ;
     wire Ze;
     reg [4:0] s;
-
+    wire PCdebug;
+    reg [31:0] PCdb;
+    reg [31:0] PC;
+    
     always @ (posedge clk)
     begin
-    if (rst)
+    if (~resetn)
         begin
-            PC = 32'd0;
-            cycle_cnt = 0;
-            user2_cnt = 0;
-            user3_cnt = 0;
+            PC <= 32'hbfc00000;
         end
     else
         begin
-            if (IRWrite) IR = Instruction;
-            MDR = Read_data;
-            A = rdata1;
-            B = rdata2;
-            s = IR[10:6];
-            ALUOut = ALUResult;
+            if (IRWrite) IR <= inst_sram_rdata;
+			if (PCdebug) debug_wb_pc <= PC;           //wbpc
+			
+            MDR <= data_sram_rdata;                               //淇敼淇″彿鍚嶇О
+			
+            A <= rdata1;
+            B <= rdata2;
+            s <= IR[10:6];
+            ALUOut <= ALUResult;
             if(PCWrite || PCSrc)
-                PC = PCnext; 
-            cycle_cnt = cycle_cnt + 1;
+                PC <= PCnext;
+//            cycle_cnt = cycle_cnt + 1;
         end
     end
-    
+ 
+always @(*) begin
+    if (|data_sram_wen) $display ("%h %h", data_sram_addr, data_sram_wdata);
+    end 
+ 
+   
     
     assign rs = IR[25:21];
     assign rt = IR[20:16];
     assign SgnExt = {{16{IR[15]}},{IR[15:0]}};
     assign func = IR[5:0];
-    assign Write_data = B;
-    assign ALUA = ALUSrcA ? A : PC;
-    assign Address = ALUOut;
-    assign PCSrc =  PCWriteCond & Ze;
+	
+    assign data_sram_wdata = B;                                  //淇敼淇″彿鍚嶇О             
+    
+	assign ALUA = ALUSrcA ? A : PC;
+    
+//	assign data_sram_addr = ALUOut;                              //淇敼淇″彿鍚嶇О
+    assign data_sram_addr = ALUResult;    
+    
+	assign PCSrc =  PCWriteCond & Ze;
     assign Ze = IsBEQ ? AZero : ~AZero;
     assign IsBEQ = IR[31:26] == 6'b000100 ? 1 : 0;
+	
+	assign data_sram_en = (data_sram_wen != 4'b0000) || MemRead;  //(姝よ鏄柊鍔犲叆鐨�)鍘烳emWrite鎴朚enRead淇″彿婵�鍙戞淇″彿
+    
+//    assign inst_sram_en = 1;
+    assign inst_sram_en = PCWrite || PCSrc;
+    
+    assign inst_sram_addr = ~resetn ? PC : PCnext;
+    
+    assign inst_sram_wen = 4'b0000;
+    assign inst_sram_wdata = 32'd0;
+    
+    assign debug_wb_rf_wen = RegWrite;
+    assign debug_wb_rf_wnum = rd;
+    assign debug_wb_rf_wdata = regwdata;
     
     reg_file reg_file1(
         .clk(clk), 
-        .rst(rst), 
+        .rst(~resetn), 
         .raddr1(rs), 
         .raddr2(rt), 
         .waddr(rd), 
@@ -98,7 +146,7 @@ module mips_cpu(
         .Zero(AZero),
         .Result(ALUResult));
     control CPUcontrol(
-        .rst(rst), 
+        .rst(~resetn), 
         .clk(clk), 
         .op(IR[31:26]), 
         .func(IR[5:0]), 
@@ -107,18 +155,15 @@ module mips_cpu(
         .ALUSrcB(ALUSrcB), 
         .MemtoReg(MemtoReg), 
         .RegWrite(RegWrite), 
-        .MemRead(MemRead), 
-        .MemWrite(MemWrite), 
+        .MemRead(MemRead),                                 //MemRead娌℃湁淇敼
+        .data_sram_wen(data_sram_wen),                     //淇敼淇″彿鍚嶇О
         .IRWrite(IRWrite), 
         .PCWrite(PCWrite), 
         .PCWriteCond(PCWriteCond),
         .PCSource(PCSource), 
         .ALUOp(ALUOp), 
-        .inst(inst_cnt), 
-        .br(br_cnt), 
-        .ld(ld_cnt),
-        .st(st_cnt),
-        .addiu(user1_cnt));
+        .PCdebug(PCdebug)
+        );
     ALUcontrol Acontrol(
         .ALUOp(ALUOp), 
         .func(IR[5:0]), 
@@ -158,159 +203,154 @@ module control(
     output ALUSrcA,
     output [1:0] ALUSrcB,
     output [1:0] MemtoReg,
-    output RegWrite,
-    output MemRead,
-    output MemWrite,
-    output PCWriteCond,
+    output [3:0] RegWrite,
+    output MemRead,                                        //姝よ骞舵湭淇敼
+	
+    output [3:0] data_sram_wen,                            //淇敼淇″彿鍚嶇О锛屾墿灞曚负4浣�
+    
+	output PCWriteCond,
     output PCWrite,
     output IRWrite,
     output [1:0] PCSource,
     output [2:0] ALUOp,
-    output reg [31:0] inst,
-    output reg [31:0] br,
-    output reg [31:0] st,
-    output reg [31:0] ld,
-    output reg [31:0] addiu
+    output PCdebug
    );
    
    reg [20:0] StateC, StateN;
    
-   assign RegDst[1] = StateC[12];
-   assign RegDst[0] = StateC[7] || StateC[16];
-   assign ALUSrcA = StateC[2] || StateC[6] || StateC[8] || StateC[9] || StateC[15] || StateC[17] || StateC[19];
-   assign ALUSrcB[1] = StateC[1] || StateC[2] || StateC[9] || StateC[15] || StateC[17] || StateC[19];
-   assign ALUSrcB[0] = StateC[0] || StateC[1] || StateC[11];
+   assign PCdebug = StateC[0];
+   assign RegDst[1]   = StateC[12];
+   assign RegDst[0]   = StateC[7]  || StateC[16];
+   assign ALUSrcA     = StateC[2]  || StateC[6]  || StateC[8]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
+   assign ALUSrcB[1]  = StateC[1]  || StateC[2]  || StateC[9]  || StateC[15] || StateC[17] || StateC[19];
+   assign ALUSrcB[0]  = StateC[0]  || StateC[1]  || StateC[11];
    assign MemtoReg[0] = StateC[4];
    assign MemtoReg[1] = StateC[16];
-   assign RegWrite = StateC[4] || StateC[7] || StateC[10] || StateC[12] || StateC[16] || StateC[18] || StateC[20];
-   assign MemRead = StateC[0] || StateC[3];
-   assign MemWrite = StateC[5];
+   assign RegWrite    = {4{StateC[4]  || StateC[7]  || StateC[10] || StateC[12] || StateC[16] || StateC[18] || StateC[20]}};
+   assign MemRead     = StateC[0]  || StateC[3];		  //姝よ骞舵湭淇敼
+   
+   assign data_sram_wen    = {4{StateC[5]}};              //淇敼淇″彿鍚嶇О锛屾墿灞曚负4浣�
+   
    assign PCWriteCond = StateC[8];
-   assign PCWrite = StateC[0] || StateC[12] || StateC[13] || StateC[14];
-   assign IRWrite = StateC[0];
+   assign PCWrite     = StateC[0]  || StateC[12] || StateC[13] || StateC[14];
+   assign IRWrite     = StateC[0];
    assign PCSource[1] = StateC[12] || StateC[13];
-   assign PCSource[0] = StateC[8] || StateC[14];
-   assign ALUOp[2] = StateC[17] || StateC[19];
-   assign ALUOp[1] = StateC[6] || StateC[15];
-   assign ALUOp[0] = StateC[8] || StateC[15] || StateC[19];
+   assign PCSource[0] = StateC[8]  || StateC[14];
+   assign ALUOp[2]    = StateC[17] || StateC[19];
+   assign ALUOp[1]    = StateC[6]  || StateC[15];
+   assign ALUOp[0]    = StateC[8]  || StateC[15] || StateC[19];
+
 
    
    parameter [20:0]
-        S0 = 21'b0000000_0000_0000_0000_01,
-        S1 = 21'b0000000_0000_0000_0000_10,
-        S2 = 21'b0000000_0000_0000_0001_00,
-        S3 = 21'b0000000_0000_0000_0010_00,
-        S4 = 21'b0000000_0000_0000_0100_00,
-        S5 = 21'b0000000_0000_0000_1000_00,
-        S6 = 21'b0000000_0000_0001_0000_00,
-        S7 = 21'b0000000_0000_0010_0000_00,
-        S8 = 21'b0000000_0000_0100_0000_00,
-        S9 = 21'b0000000_0000_1000_0000_00,
-        S10 = 21'b000000_0000_1000_0000_000,
-        S11 = 21'b000000_0001_0000_0000_000,
-        S12 = 21'b000000_0010_0000_0000_000,
-        S13 = 21'b000000_0100_0000_0000_000,
-        S14 = 21'b000000_1000_0000_0000_000,
-        S15 = 21'b000001_0000_0000_0000_000,
-        S16 = 21'b000010_0000_0000_0000_000,
-        S17 = 21'b000100_0000_0000_0000_000,
-        S18 = 21'b001000_0000_0000_0000_000,
-        S19 = 21'b010000_0000_0000_0000_000,
-        S20 = 21'b100000_0000_0000_0000_000;
+        InstFetch  = 21'b0000000_0000_0000_0000_01, //S0    鐢变簬涓婇潰鐨勪俊鍙烽渶瑕佺敱State鍙橀噺涓殑瀵瑰簲浣嶆潵鎺у埗锛屾晠淇濈暀S0~S20鐨勬敞閲�
+        InstAnal   = 21'b0000000_0000_0000_0000_10, //S1
+        LWSW       = 21'b0000000_0000_0000_0001_00, //S2
+        LW         = 21'b0000000_0000_0000_0010_00, //S3
+        LW_WB      = 21'b0000000_0000_0000_0100_00, //S4
+        SW         = 21'b0000000_0000_0000_1000_00, //S5
+        R_TYPE     = 21'b0000000_0000_0001_0000_00, //S6
+        R_WB       = 21'b0000000_0000_0010_0000_00, //S7
+        BRANCH     = 21'b0000000_0000_0100_0000_00, //S8
+        ADDIU      = 21'b0000000_0000_1000_0000_00, //S9
+        ADDIU_WB   = 21'b000000_0000_1000_0000_000, //S10
+        JAL        = 21'b000000_0001_0000_0000_000, //S11
+        JAL_PCW    = 21'b000000_0010_0000_0000_000, //S12
+        JUMP       = 21'b000000_0100_0000_0000_000, //S13
+        JR         = 21'b000000_1000_0000_0000_000, //S14
+        LUI        = 21'b000001_0000_0000_0000_000, //S15
+        SLL	       = 21'b000010_0000_0000_0000_000, //S16
+        SLTI       = 21'b000100_0000_0000_0000_000, //S17
+        SLTI_WB    = 21'b001000_0000_0000_0000_000, //S18
+        SLTIU      = 21'b010000_0000_0000_0000_000, //S19
+        SLTIU_WB   = 21'b100000_0000_0000_0000_000; //S20
 
- 
-    always @(posedge clk or posedge rst)
+    
+    always @(posedge clk)
     if(rst)
     begin
-        StateC <= S0;
-        inst <= 0;
-        br <= 0;
-        addiu <= 0;
-        st <= 0;
-        ld <= 0;
+        StateC <= InstFetch;
+//      inst <= 0;
+//      br <= 0;
+//      addiu <= 0;
+//      st <= 0;
+//      ld <= 0;
     end    
     else
     begin
         StateC <= StateN;
-        case (StateC)
-        S0: inst <= inst + 1;
-        S8, S11, S13: br <= br + 1;
-        S9: addiu <= addiu + 1;
-        S3: ld <= ld + 1;
-        S5: st <= st + 1;
-        endcase
+/*      case (StateC)
+        InstFetch:         inst <= inst + 1;
+        BRANCH, JAL, JUMP: br <= br + 1;
+        ADDIU:             addiu <= addiu + 1;
+        LW:                ld <= ld + 1;
+        SW:                st <= st + 1;       
+        endcase                     */
     end
     
     always @ (StateC)
     begin
-        StateN = 21'b0;
+        StateN = InstFetch;
         case(StateC)
-        S0: StateN = S1;
-        S1: begin
-                //inst = inst + 1;
+        InstFetch: StateN = InstAnal;
+        InstAnal: begin
                 case(op)
-                6'b100011, 6'b101011: StateN = S2; //LW, SW
-                6'b000000:            StateN = S6; //R-type       
+                6'b100011, 6'b101011:     StateN = LWSW; //LW, SW
+                6'b000000:                StateN = R_TYPE; //R-type       
                 6'b000101, 6'b000100: begin 
-                                          StateN = S8; //BNE, BEQ
-                                   //       br = br + 1;
+                                          StateN = BRANCH; //BNE, BEQ
                                       end     
                 6'b001001:            begin
-                                          StateN = S9; //ADDIU
-                                  //        addiu = addiu + 1;
+                                          StateN = ADDIU; //ADDIU
                                       end        
                 6'b000011:            begin
-                                          StateN = S11; //JAL
-                                  //        br = br + 1;
+                                          StateN = JAL; //JAL
                                       end
                 6'b000010:            begin 
-                                          StateN = S13; //JUMP
-                                  //        br = br + 1;
+                                          StateN = JUMP; //JUMP
                                       end        
-                6'b001111:            StateN = S15; //LUI
-                6'b001010:            StateN = S17; //SLTI
-                6'b001011:            StateN = S19; //SLTIU
-                default:              StateN = S0;
+                6'b001111:                StateN = LUI; //LUI
+                6'b001010:                StateN = SLTI; //SLTI
+                6'b001011:                StateN = SLTIU; //SLTIU
+                default:                  StateN = InstFetch;
                 endcase
             end
-        S2: begin
+        LWSW: begin
                 case(op)
                 6'b100011: begin
-                                StateN = S3; //LW
-                          //      ld = ld + 1;
-                            end
-                6'b101011: begin 
-                                StateN = S5; //SW
-                          //      st = st + 1;
+                               StateN = LW; //LW
                            end
-                default:   StateN = S0;
+                6'b101011: begin 
+                               StateN = SW; //SW
+                           end
+                default:       StateN = InstFetch;
                 endcase
-            end
-        S3: StateN = S4;
-        S4: StateN = S0;
-        S5: StateN = S0;
-        S6: begin
+              end
+        LW:       StateN = LW_WB;
+        LW_WB:    StateN = InstFetch;
+        SW:       StateN = InstFetch;
+        R_TYPE: begin
                 case(func)
-                6'b001000: StateN = S14;
-                6'b000000: StateN = S16;
-                default:   StateN = S7;
+                6'b001000: StateN = JR;
+                6'b000000: StateN = SLL;
+                default:   StateN = R_WB;
                 endcase
             end
-        S7: StateN = S0;
-        S8: StateN = S0;
-        S9: StateN = S10;
-        S10: StateN = S0;
-        S11: StateN = S12;
-        S12: StateN = S0;
-        S13: StateN = S0;
-        S14: StateN = S0;
-        S15: StateN = S10;
-        S16: StateN = S0;
-        S17: StateN = S18;
-        S18: StateN = S0;
-        S19: StateN = S20;
-        S20: StateN = S0;
-        default: StateN = S0;
+        R_WB:     StateN = InstFetch;
+        BRANCH:   StateN = InstFetch;
+        ADDIU:    StateN = ADDIU_WB;
+        ADDIU_WB: StateN = InstFetch;
+        JAL:      StateN = JAL_PCW;
+        JAL_PCW:  StateN = InstFetch;
+        JUMP:     StateN = InstFetch;
+        JR:       StateN = InstFetch;
+        LUI:      StateN = ADDIU_WB;
+        SLL:      StateN = InstFetch;
+        SLTI:     StateN = SLTI_WB;
+        SLTI_WB:  StateN = InstFetch;
+        SLTIU:    StateN = SLTIU_WB;
+        SLTIU_WB: StateN = InstFetch;
+        default:  StateN = InstFetch;
         endcase
     end
    endmodule
@@ -324,7 +364,9 @@ module ALUcontrol(
     wire IsOr;
     assign IsSlt = func[5] & ~func[4] & func[3] & ~func[2] & func[1] & ~func[0];
     assign IsOr = func[5] & ~func[4] & ~func[3] & func[2] & ~func[1] & func[0];
-    assign ALUop[2] = (ALUOp[0] && ~ALUOp[1] && ~ALUOp[2]) || (ALUOp[1] && ~ALUOp[0] && IsSlt) || ALUOp[2];
+    assign ALUop[2] = (ALUOp[0] && ~ALUOp[1] && ~ALUOp[2]) || 
+					  (ALUOp[1] && ~ALUOp[0] && IsSlt) || 
+					   ALUOp[2];
     assign ALUop[1] = (~IsOr && ~ALUOp[2] && ALUOp[1] && ~ALUOp[0]) || 
                       (~ALUOp[2] && ~ALUOp[1] && ~ALUOp[0]) || 
                       (ALUOp[0] && ALUOp[1] && ~ALUOp[2]) || 
