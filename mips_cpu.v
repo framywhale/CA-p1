@@ -1,5 +1,3 @@
-// 
-
 `timescale 10ns / 1ns
 
 module mycpu_top(
@@ -25,7 +23,7 @@ module mycpu_top(
 );
 
     wire ALUSrcA, PCSrc, PCWriteCond, PCWrite, IRWrite;
-    wire [ 1:0] ALUSrcB, PCSource, RegDst, MemtoReg;
+    wire [ 1:0] ALUSrcB, PCSource, RegDst, MemtoReg, MemRead;
     wire [ 2:0] ALUop, ALUOp;
     wire [31:0] regwdata;
     wire [ 3:0] RegWrite;
@@ -56,9 +54,8 @@ module mycpu_top(
             if (IRWrite) IR <= inst_sram_rdata;
             if (PCdebug) debug_wb_pc <= PC;           //wbpc
             // MDR <= data_sram_rdata;     
-            A <= rdata1;
-            B <= rdata2;
-            s <= IR[10:6];
+            A  <= rdata1;
+            B  <= rdata2;
             ALUOut <= ALUResult;
             if(PCWrite || PCSrc)
                 PC <= PCnext;
@@ -182,10 +179,10 @@ module control(
     output [1:0] MemtoReg,
     output [3:0] RegWrite,
     output       MemRead,            
-	
+    
     output [3:0] data_sram_wen,
     
-	output       PCWriteCond,
+    output       PCWriteCond,
     output       PCWrite,
     output       IRWrite,
     output [1:0] PCSource,
@@ -234,7 +231,7 @@ module control(
         JUMP       = 21'b000000_0100_0000_0000_000, //S13
         JR         = 21'b000000_1000_0000_0000_000, //S14
         LUI        = 21'b000001_0000_0000_0000_000, //S15
-        SLL	       = 21'b000010_0000_0000_0000_000, //S16
+        SLL        = 21'b000010_0000_0000_0000_000, //S16
         SLTI       = 21'b000100_0000_0000_0000_000, //S17
         SLTI_WB    = 21'b001000_0000_0000_0000_000, //S18
         SLTIU      = 21'b010000_0000_0000_0000_000, //S19
@@ -319,8 +316,8 @@ module ALUcontrol(
     assign IsSlt = func[5] & ~func[4] & func[3] & ~func[2] & func[1] & ~func[0];
     assign IsOr  = func[5] & ~func[4] & ~func[3] & func[2] & ~func[1] & func[0];
     assign ALUop[2] = (ALUOp[0] && ~ALUOp[1] && ~ALUOp[2]) || 
-					  (ALUOp[1] && ~ALUOp[0] && IsSlt) || 
-					   ALUOp[2];
+                      (ALUOp[1] && ~ALUOp[0] && IsSlt) || 
+                       ALUOp[2];
     assign ALUop[1] = (~IsOr && ~ALUOp[2] && ALUOp[1] && ~ALUOp[0]) || 
                       (~ALUOp[2] && ~ALUOp[1] && ~ALUOp[0]) || 
                       (ALUOp[0] && ALUOp[1] && ~ALUOp[2]) || 
@@ -338,9 +335,9 @@ module MUX4(
     output [31:0] ALUB
   );
     wire [31:0] and1, and2, and3, and4, op1, op1x, op0, op0x, cons;
-    assign op1 = {32{op[1]}};
+    assign op1  = {32{ op[1]}};
     assign op1x = {32{~op[1]}};
-    assign op0 = {32{op[0]}};
+    assign op0  = {32{ op[0]}};
     assign op0x = {32{~op[0]}};
     assign cons = 32'd4;
     assign and1 = B & op1x & op0x;
@@ -356,9 +353,9 @@ module MUX3(
     output [31:0] PC
   );
     wire [31:0] and1, and2, and3, op1, op1x, op0, op0x;
-    assign op1  = {32{op[1]}};
+    assign op1  = {32{ op[1]}};
     assign op1x = {32{~op[1]}};
-    assign op0  = {32{op[0]}};
+    assign op0  = {32{ op[0]}};
     assign op0x = {32{~op[0]}};
     assign and1 = PCS1 & op1x & op0x;
     assign and2 = PCS2 & op1x & op0;
@@ -372,9 +369,9 @@ module WaddrMUX(
     output [4:0] waddr
   );
     wire [4:0] and1, and2, and3, op1, op1x, op0, op0x, addr1, addr2, addr3;
-    assign op1   = {5{RegDst[1]}};
+    assign op1   = {5{ RegDst[1]}};
     assign op1x  = {5{~RegDst[1]}};
-    assign op0   = {5{RegDst[0]}};
+    assign op0   = {5{ RegDst[0]}};
     assign op0x  = {5{~RegDst[0]}};
     assign addr1 = Instruction[9:5];
     assign addr2 = Instruction[4:0];
@@ -391,14 +388,12 @@ module WdataMUX(
     output [31:0] WriteData
   );
     wire [31:0] and1, and2, and3, op1, op1x, op0, op0x;
-    assign op1  = {32{MemtoReg[1]}};
+    assign op1  = {32{ MemtoReg[1]}};
     assign op1x = {32{~MemtoReg[1]}};
-    assign op0  = {32{MemtoReg[0]}};
+    assign op0  = {32{ MemtoReg[0]}};
     assign op0x = {32{~MemtoReg[0]}};
     assign and1 = ALUOut & op1x & op0x;
     assign and2 = MDR & op1x & op0;
     assign and3 = ALUOutLF & op1 & op0x;
     assign WriteData = and1 | and2 | and3;
 endmodule
-	
-
