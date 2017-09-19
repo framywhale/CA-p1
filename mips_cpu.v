@@ -72,6 +72,7 @@ module mycpu_top(
     assign rst    = ~resetn;  // human-read reset signal
     assign rs     = IR[25:21];
     assign rt     = IR[20:16];
+    assign sa     = IR[10: 6];
     assign SgnExt = {{16{IR[15]}},{IR[15:0]}};
     assign func   = IR[5:0];                                        
     
